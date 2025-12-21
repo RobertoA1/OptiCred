@@ -1,11 +1,27 @@
+# OptiCred - Dependencias
+# Compatible con Python 3.12.9
+# Todas las versiones usan wheels pre-compilados
+
+# Framework principal
 streamlit==1.39.0
+
+# Análisis de datos
 pandas==2.2.3
 numpy==1.26.4
-plotly==5.18.0
-openpyxl==3.1.2
-beautifulsoup4==4.12.3
-requests==2.31.0
-lxml==5.1.0
-reportlab==4.0.9
-google-generativeai==0.3.2
+
+# Cálculos financieros
 numpy-financial==1.0.0
+
+# Visualización
+plotly==5.18.0
+
+# Web scraping (sin lxml - usar html.parser)
+beautifulsoup4==4.12.3
+requests==2.32.3
+
+# Exportación
+openpyxl==3.1.5
+reportlab==4.2.5
+
+# Inteligencia Artificial
+google-generativeai==0.8.3
