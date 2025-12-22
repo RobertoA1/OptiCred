@@ -20,7 +20,7 @@ import logging
 import uvicorn
 
 from modules.scraper.extractores.sbs.tabla_moneda_nacional import Tabla_Moneda_Nacional
-from modules.scraper.solicitadores.sbs.pagina_tasas_nacionales import Pagina_Tasas_Nacionales
+from modules.scraper.solicitadores.sbs.pagina_tasas import Pagina_Tasas
 
 from modules.scraper.servicios.sbs.sbs_scraper import SBSScraper
 from modules.enum.sbs.slice_tipo_credito import Slice_Tipo_Credito
@@ -48,7 +48,7 @@ app.add_middleware(
 )
 
 # Instancia global del scraper
-scraper = SBSScraper(Pagina_Tasas_Nacionales, Tabla_Moneda_Nacional)
+scraper = SBSScraper(Pagina_Tasas, Tabla_Moneda_Nacional)
 
 def parse_slice_tipo_credito(tipo_credito: str) -> Optional[Slice_Tipo_Credito]:
     try:
