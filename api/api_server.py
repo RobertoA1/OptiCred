@@ -7,6 +7,9 @@ import asyncio
 import sys
 import platform
 
+from modules.enum.sbs.tipo_moneda import Tipo_Moneda
+from modules.scraper.extractores.sbs.tabla_moneda_extranjera import Tabla_Moneda_Extranjera
+
 # Configurar event loop para Windows ANTES de importar el scraper (Playwright)
 if platform.system() == 'Windows' and sys.version_info >= (3, 8):
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
@@ -20,6 +23,7 @@ import logging
 import uvicorn
 
 from modules.scraper.extractores.sbs.tabla_moneda_nacional import Tabla_Moneda_Nacional
+from modules.scraper.extractores.sbs.tabla_moneda_extranjera import Tabla_Moneda_Extranjera
 from modules.scraper.solicitadores.sbs.pagina_tasas import Pagina_Tasas
 
 from modules.scraper.servicios.sbs.sbs_scraper import SBSScraper
@@ -48,7 +52,7 @@ app.add_middleware(
 )
 
 # Instancia global del scraper
-scraper = SBSScraper(Pagina_Tasas, Tabla_Moneda_Nacional)
+scraper = SBSScraper(Pagina_Tasas, Tabla_Moneda_Nacional, Tabla_Moneda_Extranjera)
 
 def parse_slice_tipo_credito(tipo_credito: str) -> Optional[Slice_Tipo_Credito]:
     try:
@@ -183,6 +187,102 @@ async def obtener_tasa_actualizada(fecha: str):
         fecha = fecha.strip()
         formato = "%d-%m-%Y"
         tasa = await scraper.obtener_tasa_actualizada(datetime.strptime(fecha, formato).date())
+        return tasa.to_json(orient='split')
+    except Exception as e:
+        logger.error(f"Error al obtener tasa actualizada: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+###
+### EXTRANJERA
+###
+
+@app.get("/extranjera/tasas/activas")
+async def get_tasas_activas():
+    """
+    Obtener todas las tasas activas de la SBS
+    """
+    try:     
+        logger.info("Obteniendo tasas activas de SBS...")
+        tasas = await scraper.get_tasas_activas(moneda=Tipo_Moneda.EXTRANJERA)
+        
+        if tasas.empty:
+            raise HTTPException(status_code=404, detail="No se pudieron obtener las tasas")
+        
+        # Almacenar en cache
+        # set_cache(cache_key, tasas)
+        
+        return tasas.to_json(orient='split')
+        
+    except Exception as e:
+        logger.error(f"Error al obtener tasas activas: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@app.get("/extranjera/tasas/tipo/{tipo_credito}")
+async def get_tasas_por_tipo(tipo_credito: str):
+    """
+    Obtener tasas filtradas por tipo de crédito
+    """
+    try:
+        tipo_credito = tipo_credito.upper()
+
+        enum_tipo_credito = parse_slice_tipo_credito(tipo_credito)
+        if enum_tipo_credito is None:
+            raise HTTPException(status_code=400, detail="Tipo de crédito no válido")
+        
+        tasas = await scraper.get_tasas(enum_tipo_credito, moneda=Tipo_Moneda.EXTRANJERA)
+        return tasas.to_json(orient='split')
+        
+    except Exception as e:
+        logger.error(f"Error al obtener tasas por tipo: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@app.get('/extranjera/bancos/')
+async def get_bancos():
+    try: 
+        bancos = await scraper.get_bancos(moneda=Tipo_Moneda.EXTRANJERA)
+        return bancos.to_json(orient='split')
+    except Exception as e:
+        logger.error(f"Error al obtener bancos: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@app.get('/extranjera/tea/{banco}/{tipo_credito}/{credito}')
+async def get_tea(banco: str, tipo_credito: str, credito: str):
+    try:
+        enum_banco = parse_columna_banco(banco)
+        enum_credito = parse_credito(tipo_credito, credito)
+
+        if enum_banco is None:
+            raise HTTPException(status_code=400, detail="Banco no válido")
+
+        if enum_credito is None:
+            raise HTTPException(status_code=400, detail="Tipo de crédito o crédito no válido")
+
+        tea = await scraper.get_tea(enum_banco, enum_credito, moneda=Tipo_Moneda.EXTRANJERA)
+        return tea
+    except Exception as e:
+        logger.error(f"Error al obtener tea: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@app.get('/extranjera/tasas/promedio/{tipo_credito}/{credito}')
+async def get_promedio(tipo_credito: str, credito: str):
+    try:
+        enum_credito = parse_credito(tipo_credito, credito)
+
+        if enum_credito is None:
+            raise HTTPException(status_code=400, detail="Tipo de crédito o crédito no válido")
+
+        tea = await scraper.get_promedio(enum_credito, moneda=Tipo_Moneda.EXTRANJERA)
+        return tea 
+    except Exception as e:
+        logger.error(f"Error al obtener promedio: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@app.get('/extranjera/tasas/{fecha}')
+async def obtener_tasa_actualizada(fecha: str):
+    try:
+        fecha = fecha.strip()
+        formato = "%d-%m-%Y"
+        tasa = await scraper.obtener_tasa_actualizada(fecha=datetime.strptime(fecha, formato).date(), moneda=Tipo_Moneda.EXTRANJERA)
         return tasa.to_json(orient='split')
     except Exception as e:
         logger.error(f"Error al obtener tasa actualizada: {str(e)}")
