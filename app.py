@@ -3,6 +3,8 @@
 OptiCred - Sistema Inteligente de Optimización de Créditos
 """
 import streamlit as st
+import asyncio
+from api.api_client import OptiCredAPIClient
 from modules.calculadora import mostrar_calculadora_creditos
 from modules.comparador import mostrar_comparador_creditos
 from modules.simulador import mostrar_simulador_pagos
@@ -26,7 +28,8 @@ opcion = st.sidebar.radio(
      "💰 Calculadora de Créditos",
      "📊 Comparador de Créditos",
      "🔄 Simulador de Pagos Extras",
-     "🎯 Recomendador Inteligente"],
+     "🎯 Recomendador Inteligente",
+     "🧪 Prueba de Conexión"],
     index=0
 )
 
@@ -216,6 +219,36 @@ elif opcion == "🔄 Simulador de Pagos Extras":
 
 elif opcion == "🎯 Recomendador Inteligente":
     mostrar_recomendador_inteligente()
+
+elif opcion == "🧪 Prueba de Conexión":
+    st.header("🧪 Prueba de Conexión con la API")
+    st.caption("Verifica el estado del servidor y muestra tablas devueltas por los endpoints.")
+
+    with st.spinner("Conectando con la API y obteniendo datos..."):
+        try:
+            async def _fetch_basico():
+                client = OptiCredAPIClient()
+                try:
+                    health = await client.health_check()
+                    tasas_activas = await client.get_tasas_activas()
+                    bancos = await client.get_bancos()
+                    return health, tasas_activas, bancos
+                finally:
+                    await client.close_session()
+
+            health, tasas_activas, bancos = asyncio.run(_fetch_basico())
+            st.success(f"API OK: {health.get('status')} | {health.get('timestamp')}")
+        except Exception as e:
+            st.error(f"Error al conectar con la API: {e}")
+            tasas_activas, bancos = None, None
+
+    if tasas_activas is not None:
+        st.subheader("Tasas Activas")
+        st.dataframe(tasas_activas, use_container_width=True)
+
+    if bancos is not None:
+        st.subheader("Bancos")
+        st.dataframe(bancos, use_container_width=True)
 
 # Footer
 st.markdown("---")

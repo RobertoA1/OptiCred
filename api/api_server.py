@@ -93,7 +93,7 @@ async def health_check():
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "cache_size": len(cache)
+        "cache_size": 0
     }
 
 @app.get("/tasas/activas")
