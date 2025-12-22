@@ -11,7 +11,9 @@ import pandas as pd
 from datetime import date, timedelta
 import time
 import logging
+
 from typing import Optional
+from aiocache import cached
 
 from modules.enum.sbs.slice_tipo_credito import Slice_Tipo_Credito
 from modules.enum.sbs.indice_tipo_credito import Corporativo, Grandes_Empresas, Medianas_Empresas, Pequenas_Empresas, Micro_Empresas, Consumo, Hipotecarios
@@ -75,7 +77,8 @@ class SBSScraper:
     
     def _obtener_extractor(self, moneda: Tipo_Moneda):
         return [self._extraer_tabla_nacional, self._extraer_tabla_extranjera][moneda.value]
-    
+
+    @cached(ttl=86400)
     async def get_tasas_activas(self, fecha: Optional[date] = None, moneda: Tipo_Moneda = Tipo_Moneda.NACIONAL) -> pd.DataFrame:
         soup = await self._obtener_bs4_de_sbs(fecha=fecha)
         if not soup:
@@ -107,6 +110,6 @@ class SBSScraper:
     async def get_promedio(self, tipo_credito: Corporativo | Grandes_Empresas | Medianas_Empresas | Pequenas_Empresas | Micro_Empresas | Consumo | Hipotecarios, moneda: Tipo_Moneda = Tipo_Moneda.NACIONAL) -> float:
         tabla = await self.get_tasas_activas(moneda=moneda)
         return tabla.iloc[tipo_credito.value, Columna_Banco.PROMEDIO.value]
-
+    
     async def obtener_tasa_actualizada(self, fecha: date, moneda: Tipo_Moneda = Tipo_Moneda.NACIONAL):
         return await self.get_tasas_activas(fecha=fecha, moneda=moneda)
