@@ -12,20 +12,20 @@ if platform.system() == 'Windows' and sys.version_info >= (3, 8):
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-import pandas as pd
-from datetime import datetime
+from typing import Optional
+
 import logging
-from typing import Optional, Dict, Any
 import uvicorn
+
 from modules.scraper.extractores.sbs.tabla_moneda_nacional import Tabla_Moneda_Nacional
 from modules.scraper.solicitadores.sbs.pagina_tasas_nacionales import Pagina_Tasas_Nacionales
-from modules.sbs_scraper import SBSScraper
-from modules.scraper.tipos_credito.slice_tipo_credito import Slice_Tipo_Credito
-from modules.scraper.bancos.columna_banco import Columna_Banco
-from modules.scraper.tipos_credito.indice_tipo_credito import Corporativo, Grandes_Empresas, Medianas_Empresas, Pequenas_Empresas, Micro_Empresas, Consumo, Hipotecarios
+
+from modules.scraper.servicios.sbs.sbs_scraper import SBSScraper
+from modules.enum.sbs.slice_tipo_credito import Slice_Tipo_Credito
+from modules.enum.sbs.columna_banco import Columna_Banco
+from modules.enum.sbs.indice_tipo_credito import Corporativo, Grandes_Empresas, Medianas_Empresas, Pequenas_Empresas, Micro_Empresas, Consumo, Hipotecarios
 
 # Configuración de logging
 logging.basicConfig(level=logging.INFO)
