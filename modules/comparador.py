@@ -17,10 +17,93 @@ from modules.interes import calcular_tcea_completa
 
 # Importar API de tasas (cuando el Integrante 1 la tenga lista)
 try:
-    from modules.api_tasas import APITasas
+    from modules.api_tasas import (
+        APITasas,
+        cargar_datos_api,
+        obtener_bancos,
+        obtener_tea,
+        obtener_promedio
+    )
     API_DISPONIBLE = True
 except ImportError:
     API_DISPONIBLE = False
+
+CATEGORIAS_CREDITO = {
+    "Corporativos": {
+        "descripcion": "Créditos para grandes corporaciones con ventas anuales > S/ 200 millones",
+        "opciones": {
+            "Descuentos": "Descuentos",
+            "Préstamos hasta 30 días": "Préstamos hasta 30 días",
+            "Préstamos de 31 a 90 días": "Préstamos de 31 a 90 días",
+            "Préstamos de 91 a 180 días": "Préstamos de 91 a 180 días",
+            "Préstamos de 181 a 360 días": "Préstamos de 181 a 360 días",
+            "Préstamos a más de 360 días": "Préstamos a más de 360 días",
+        }
+    },
+    "Grandes Empresas": {
+        "descripcion": "Créditos para empresas con ventas anuales > S/ 20 millones",
+        "opciones": {
+            "Descuentos": "Descuentos",
+            "Préstamos hasta 30 días": "Préstamos hasta 30 días",
+            "Préstamos de 31 a 90 días": "Préstamos de 31 a 90 días",
+            "Préstamos de 91 a 180 días": "Préstamos de 91 a 180 días",
+            "Préstamos de 181 a 360 días": "Préstamos de 181 a 360 días",
+            "Préstamos a más de 360 días": "Préstamos a más de 360 días",
+        }
+    },
+    "Medianas Empresas": {
+        "descripcion": "Créditos para empresas con ventas anuales entre S/ 1.7 y S/ 20 millones",
+        "opciones": {
+            "Descuentos": "Descuentos",
+            "Préstamos hasta 30 días": "Préstamos hasta 30 días",
+            "Préstamos de 31 a 90 días": "Préstamos de 31 a 90 días",
+            "Préstamos de 91 a 180 días": "Préstamos de 91 a 180 días",
+            "Préstamos de 181 a 360 días": "Préstamos de 181 a 360 días",
+            "Préstamos a más de 360 días": "Préstamos a más de 360 días",
+        }
+    },
+    "Pequeñas Empresas": {
+        "descripcion": "Créditos para empresas con ventas anuales entre S/ 150 mil y S/ 1.7 millones",
+        "opciones": {
+            "Descuentos": "Descuentos",
+            "Préstamos hasta 30 días": "Préstamos hasta 30 días",
+            "Préstamos de 31 a 90 días": "Préstamos de 31 a 90 días",
+            "Préstamos de 91 a 180 días": "Préstamos de 91 a 180 días",
+            "Préstamos de 181 a 360 días": "Préstamos de 181 a 360 días",
+            "Préstamos a más de 360 días": "Préstamos a más de 360 días",
+        }
+    },
+    "Microempresas": {
+        "descripcion": "Créditos para negocios con ventas anuales < S/ 150 mil",
+        "opciones": {
+            "Tarjetas de Crédito": "Tarjetas de Crédito",
+            "Descuentos": "Descuentos",
+            "Préstamos Revolventes": "Préstamos Revolventes",
+            "Préstamos a cuota fija hasta 30 días": "Préstamos a cuota fija hasta 30 días",
+            "Préstamos a cuota fija de 31 a 90 días": "Préstamos a cuota fija de 31 a 90 días",
+            "Préstamos a cuota fija de 91 a 180 días": "Préstamos a cuota fija de 91 a 180 días",
+            "Préstamos a cuota fija de 181 a 360 días": "Préstamos a cuota fija de 181 a 360 días",
+            "Préstamos a cuota fija a más de 360 días": "Préstamos a cuota fija a más de 360 días",
+        }
+    },
+    "Consumo": {
+        "descripcion": "Créditos para personas naturales (uso personal)",
+        "opciones": {
+            "Tarjetas de Crédito": "Tarjetas de Crédito",
+            "Préstamos Revolventes": "Préstamos Revolventes",
+            "Préstamos para Automóviles": "Préstamos no Revolventes para automóviles",
+            "Libre Disponibilidad (hasta 360 días)": "Préstamos no Revolventes para libre disponibilidad hasta 360 días",
+            "Libre Disponibilidad (más de 360 días)": "Préstamos no Revolventes para libre disponibilidad a más de 360 días",
+            "Créditos Pignoraticios": "Créditos pignoraticios",
+        }
+    },
+    "Hipotecarios": {
+        "descripcion": "Créditos con garantía hipotecaria para vivienda",
+        "opciones": {
+            "Préstamos para Vivienda": "Préstamos hipotecarios para vivienda",
+        }
+    },
+}
 
 
 def mostrar_comparador_creditos():
@@ -35,7 +118,27 @@ def mostrar_comparador_creditos():
     # ========== PASO 1: SELECCIONAR SISTEMA DE AMORTIZACIÓN ==========
     st.subheader("🔧 Configuración General")
     
-    col_config1, col_config2 = st.columns(2)
+    # Cargar datos de la API (con cache)
+    api_conectada = False
+    api_tasas = None
+    
+    if API_DISPONIBLE:
+        with st.spinner("Conectando con la API de tasas SBS..."):
+            df_tasas, df_bancos, api_conectada = cargar_datos_api()
+            
+            if api_conectada:
+                api_tasas = APITasas()
+                api_tasas._tasas_activas = df_tasas
+                api_tasas._bancos = df_bancos
+                api_tasas._cache_cargado = True
+    
+    # Mostrar estado de conexión
+    if api_conectada:
+        st.success("✅ Conectado a la API - Usando tasas reales de la SBS")
+    else:
+        st.warning("⚠️ API no disponible - Usando tasas de referencia")
+    
+    col_config1, col_config2, col_config3 = st.columns(3)  # Ahora son 3 columnas
     
     with col_config1:
         sistema_amortizacion = st.selectbox(
@@ -45,25 +148,50 @@ def mostrar_comparador_creditos():
         )
     
     with col_config2:
-        # Inicializar API si está disponible
-        if API_DISPONIBLE:
-            api_tasas = APITasas()
-            tipo_credito = st.selectbox(
-                "🏦 Tipo de Crédito",
-                ["Consumo", "Hipotecario", "Vehicular", "Microempresa", "Pequeña Empresa"],
-                help="Selecciona el tipo de crédito para cargar las tasas reales de bancos"
-            )
-            
-            try:
-                bancos_disponibles = api_tasas.get_bancos(tipo_credito)
-            except:
-                bancos_disponibles = ["BCP", "Interbank", "BBVA", "Scotiabank", "Banco Pichincha"]
-        else:
-            tipo_credito = st.selectbox(
-                "🏦 Tipo de Crédito",
-                ["Consumo", "Hipotecario", "Vehicular", "Microempresa", "Pequeña Empresa"]
-            )
-            bancos_disponibles = ["BCP", "Interbank", "BBVA", "Scotiabank", "Banco Pichincha"]
+        # PRIMER SELECTOR: Categoría de crédito
+        categoria_credito = st.selectbox(
+            "🏢 Categoría de Crédito",
+            list(CATEGORIAS_CREDITO.keys()),
+            help="Selecciona según el tipo de cliente o empresa"
+        )
+        
+        # Mostrar descripción de la categoría
+        st.caption(f"ℹ️ {CATEGORIAS_CREDITO[categoria_credito]['descripcion']}")
+    
+    with col_config3:
+        # SEGUNDO SELECTOR: Tipo específico (depende del primero)
+        opciones_disponibles = list(CATEGORIAS_CREDITO[categoria_credito]["opciones"].keys())
+        
+        tipo_credito_especifico = st.selectbox(
+            "💳 Tipo de Producto",
+            opciones_disponibles,
+            help="Selecciona el producto crediticio específico"
+        )
+
+    # Construir el tipo de crédito completo para buscar en la API
+    # Formato: "Categoría - Tipo" para identificación única
+    tipo_credito = f"{categoria_credito} - {tipo_credito_especifico}"
+    
+    # Obtener el nombre de la fila en la tabla SBS
+    fila_tabla_sbs = CATEGORIAS_CREDITO[categoria_credito]["opciones"][tipo_credito_especifico]
+
+    # Obtener bancos disponibles
+    if api_conectada and api_tasas:
+        bancos_disponibles = api_tasas.get_bancos(tipo_credito)
+        promedio_mercado = api_tasas.get_promedio(tipo_credito)
+        mejor_banco, mejor_tasa = api_tasas.get_mejor_tasa(tipo_credito)
+        
+        # Mostrar info del mercado
+        col_info1, col_info2, col_info3 = st.columns(3)
+        with col_info1:
+            st.metric("📈 Promedio del Mercado", f"{promedio_mercado:.2f}%")
+        with col_info2:
+            st.metric("🏆 Mejor Tasa", f"{mejor_tasa:.2f}%", mejor_banco)
+        with col_info3:
+            st.metric("🏦 Bancos Disponibles", f"{len(bancos_disponibles)}")
+    else:
+        bancos_disponibles = ["BBVA", "Crédito", "Interbank", "Scotiabank", "Pichincha", "BIF"]
+        promedio_mercado = 15.0
     
     # Mostrar información del sistema seleccionado
     if sistema_amortizacion == "Francés (Cuota Fija)":
@@ -106,13 +234,13 @@ def mostrar_comparador_creditos():
             )
             
             # Obtener TEA sugerida según banco (si API disponible)
-            if API_DISPONIBLE:
-                try:
-                    tea_sugerida = api_tasas.get_tea(banco, tipo_credito)
-                except:
-                    tea_sugerida = 20.0 + (i * 2)
+            if api_conectada and api_tasas:
+                tea_sugerida = api_tasas.get_tea(banco, tipo_credito)
+                # Si no hay tasa válida, usar default
+                if tea_sugerida <= 0:
+                    tea_sugerida = 15.0 + (i * 2)
             else:
-                tea_sugerida = 20.0 + (i * 2)
+                tea_sugerida = 15.0 + (i * 2)
             
             st.markdown("**Datos Principales:**")
             
@@ -147,15 +275,14 @@ def mostrar_comparador_creditos():
             )
             
             # Mostrar si la tasa está por encima o debajo del promedio
-            if API_DISPONIBLE:
-                try:
-                    promedio = api_tasas.get_promedio(tipo_credito)
-                    if tea < promedio:
-                        st.success(f"✅ Tasa {(promedio - tea):.2f}% por debajo del promedio")
-                    else:
-                        st.warning(f"⚠️ Tasa {(tea - promedio):.2f}% por encima del promedio")
-                except:
-                    pass
+            if api_conectada:
+                diferencia = tea - promedio_mercado
+                if diferencia < -0.5:
+                    st.success(f"✅ {abs(diferencia):.2f}% menor al promedio del mercado")
+                elif diferencia > 0.5:
+                    st.warning(f"⚠️ {diferencia:.2f}% mayor al promedio del mercado")
+                else:
+                    st.info("📊 Cercana al promedio del mercado")
             
             st.markdown("---")
             st.markdown("**💰 Costos Adicionales:**")
