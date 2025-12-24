@@ -78,7 +78,7 @@ class SBSScraper:
     def _obtener_extractor(self, moneda: Tipo_Moneda):
         return [self._extraer_tabla_nacional, self._extraer_tabla_extranjera][moneda.value]
 
-    @cached(ttl=86400)
+    @cached(ttl=21600)
     async def get_tasas_activas(self, fecha: Optional[date] = None, moneda: Tipo_Moneda = Tipo_Moneda.NACIONAL) -> pd.DataFrame:
         soup = await self._obtener_bs4_de_sbs(fecha=fecha)
         if not soup:
