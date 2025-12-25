@@ -1,6 +1,8 @@
 # modules/comparador.py
 """
-Función para mostrar el comparador de créditos con integración a API SBS
+Función para mostrar el comparador de créditos con integración a API SBS.
+CORREGIDO: Pasa la categoría correctamente a todos los métodos de API.
+CORREGIDO: Variables tipo_credito reemplazadas por categoria_credito y tipo_credito_especifico
 """
 import streamlit as st
 import plotly.graph_objects as go
@@ -15,27 +17,133 @@ from modules.amortizacion import (
 from modules.utilities import formatear_moneda
 from modules.interes import calcular_tcea_completa
 
-# Importar API de tasas (cuando el Integrante 1 la tenga lista)
+# Importar API de tasas
 try:
-    from modules.api_tasas import APITasas
+    from modules.api_tasas import (
+        APITasas,
+        cargar_datos_api,
+        obtener_bancos,
+        obtener_tea,
+        obtener_promedio
+    )
     API_DISPONIBLE = True
 except ImportError:
     API_DISPONIBLE = False
 
+CATEGORIAS_CREDITO = {
+    "Corporativos": {
+        "descripcion": "Créditos para grandes corporaciones con ventas anuales > S/ 200 millones",
+        "opciones": {
+            "Descuentos": "Descuentos",
+            "Préstamos hasta 30 días": "Préstamos hasta 30 días",
+            "Préstamos de 31 a 90 días": "Préstamos de 31 a 90 días",
+            "Préstamos de 91 a 180 días": "Préstamos de 91 a 180 días",
+            "Préstamos de 181 a 360 días": "Préstamos de 181 a 360 días",
+            "Préstamos a más de 360 días": "Préstamos a más de 360 días",
+        }
+    },
+    "Grandes Empresas": {
+        "descripcion": "Créditos para empresas con ventas anuales > S/ 20 millones",
+        "opciones": {
+            "Descuentos": "Descuentos",
+            "Préstamos hasta 30 días": "Préstamos hasta 30 días",
+            "Préstamos de 31 a 90 días": "Préstamos de 31 a 90 días",
+            "Préstamos de 91 a 180 días": "Préstamos de 91 a 180 días",
+            "Préstamos de 181 a 360 días": "Préstamos de 181 a 360 días",
+            "Préstamos a más de 360 días": "Préstamos a más de 360 días",
+        }
+    },
+    "Medianas Empresas": {
+        "descripcion": "Créditos para empresas con ventas anuales entre S/ 1.7 y S/ 20 millones",
+        "opciones": {
+            "Descuentos": "Descuentos",
+            "Préstamos hasta 30 días": "Préstamos hasta 30 días",
+            "Préstamos de 31 a 90 días": "Préstamos de 31 a 90 días",
+            "Préstamos de 91 a 180 días": "Préstamos de 91 a 180 días",
+            "Préstamos de 181 a 360 días": "Préstamos de 181 a 360 días",
+            "Préstamos a más de 360 días": "Préstamos a más de 360 días",
+        }
+    },
+    "Pequeñas Empresas": {
+        "descripcion": "Créditos para empresas con ventas anuales entre S/ 150 mil y S/ 1.7 millones",
+        "opciones": {
+            "Descuentos": "Descuentos",
+            "Préstamos hasta 30 días": "Préstamos hasta 30 días",
+            "Préstamos de 31 a 90 días": "Préstamos de 31 a 90 días",
+            "Préstamos de 91 a 180 días": "Préstamos de 91 a 180 días",
+            "Préstamos de 181 a 360 días": "Préstamos de 181 a 360 días",
+            "Préstamos a más de 360 días": "Préstamos a más de 360 días",
+        }
+    },
+    "Microempresas": {
+        "descripcion": "Créditos para negocios con ventas anuales < S/ 150 mil",
+        "opciones": {
+            "Tarjetas de Crédito": "Tarjetas de Crédito",
+            "Descuentos": "Descuentos",
+            "Préstamos Revolventes": "Préstamos Revolventes",
+            "Préstamos a cuota fija hasta 30 días": "Préstamos a cuota fija hasta 30 días",
+            "Préstamos a cuota fija de 31 a 90 días": "Préstamos  a cuota fija de 31 a 90 días",
+            "Préstamos a cuota fija de 91 a 180 días": "Préstamos  a cuota fija de 91 a 180 días",
+            "Préstamos a cuota fija de 181 a 360 días": "Préstamos a cuota fija de 181 a 360 días",
+            "Préstamos a cuota fija a más de 360 días": "Préstamos a cuota fija a más de 360 días",
+        }
+    },
+    "Consumo": {
+        "descripcion": "Créditos para personas naturales (uso personal)",
+        "opciones": {
+            "Tarjetas de Crédito": "Tarjetas de Crédito",
+            "Préstamos Revolventes": "Préstamos Revolventes",
+            "Préstamos para Automóviles": "Préstamos no  Revolventes para automóviles",
+            "Libre Disponibilidad (hasta 360 días)": "Préstamos no  Revolventes para libre disponibilidad hasta 360 días",
+            "Libre Disponibilidad (más de 360 días)": "Préstamos no  Revolventes para libre disponibilidad a más de 360 días",
+            "Créditos Pignoraticios": "Créditos pignoraticios",
+        }
+    },
+    "Hipotecarios": {
+        "descripcion": "Créditos con garantía hipotecaria para vivienda",
+        "opciones": {
+            "Préstamos para Vivienda": "Préstamos hipotecarios para vivienda",
+        }
+    },
+}
+
 
 def mostrar_comparador_creditos():
     """
-    Muestra la interfaz del comparador de créditos con datos reales de SBS
+    Muestra la interfaz del comparador de créditos con datos reales de SBS.
+    CORREGIDO: Maneja correctamente filas con nombres repetidos pasando la categoría.
     """
     st.title("📊 Comparador de Créditos")
     st.write("Compara múltiples opciones de financiamiento y elige la mejor")
     
     st.divider()
     
-    # ========== PASO 1: SELECCIONAR SISTEMA DE AMORTIZACIÓN ==========
+    # ========== PASO 1: CONFIGURACIÓN ==========
     st.subheader("🔧 Configuración General")
     
-    col_config1, col_config2 = st.columns(2)
+    # Cargar datos de la API (con cache)
+    api_conectada = False
+    api_tasas = None
+    
+    if API_DISPONIBLE:
+        with st.spinner("Conectando con la API de tasas SBS..."):
+            df_tasas, df_bancos, api_conectada = cargar_datos_api()
+            
+            if api_conectada:
+                api_tasas = APITasas()
+                api_tasas._tasas_activas = df_tasas
+                api_tasas._bancos = df_bancos
+                api_tasas._cache_cargado = True
+                # IMPORTANTE: Construir el índice de categorías
+                api_tasas._construir_indice_categorias()
+    
+    # Mostrar estado de conexión
+    if api_conectada:
+        st.success("✅ Conectado a la API - Usando tasas reales de la SBS")
+    else:
+        st.warning("⚠️ API no disponible - Usando tasas de referencia")
+    
+    col_config1, col_config2, col_config3 = st.columns(3)
     
     with col_config1:
         sistema_amortizacion = st.selectbox(
@@ -45,37 +153,105 @@ def mostrar_comparador_creditos():
         )
     
     with col_config2:
-        # Inicializar API si está disponible
-        if API_DISPONIBLE:
-            api_tasas = APITasas()
-            tipo_credito = st.selectbox(
-                "🏦 Tipo de Crédito",
-                ["Consumo", "Hipotecario", "Vehicular", "Microempresa", "Pequeña Empresa"],
-                help="Selecciona el tipo de crédito para cargar las tasas reales de bancos"
-            )
-            
-            try:
-                bancos_disponibles = api_tasas.get_bancos(tipo_credito)
-            except:
-                bancos_disponibles = ["BCP", "Interbank", "BBVA", "Scotiabank", "Banco Pichincha"]
-        else:
-            tipo_credito = st.selectbox(
-                "🏦 Tipo de Crédito",
-                ["Consumo", "Hipotecario", "Vehicular", "Microempresa", "Pequeña Empresa"]
-            )
-            bancos_disponibles = ["BCP", "Interbank", "BBVA", "Scotiabank", "Banco Pichincha"]
+        # PRIMER SELECTOR: Categoría de crédito
+        categoria_credito = st.selectbox(
+            "🏢 Categoría de Crédito",
+            list(CATEGORIAS_CREDITO.keys()),
+            help="Selecciona según el tipo de cliente o empresa"
+        )
+        st.caption(f"ℹ️ {CATEGORIAS_CREDITO[categoria_credito]['descripcion']}")
     
-    # Mostrar información del sistema seleccionado
+    with col_config3:
+        # SEGUNDO SELECTOR: Tipo específico (depende del primero)
+        opciones_disponibles = list(CATEGORIAS_CREDITO[categoria_credito]["opciones"].keys())
+        
+        tipo_credito_especifico = st.selectbox(
+            "💳 Tipo de Producto",
+            opciones_disponibles,
+            help="Selecciona el producto crediticio específico"
+        )
+
+    # Obtener el nombre de la fila en la tabla SBS
+    fila_tabla_sbs = CATEGORIAS_CREDITO[categoria_credito]["opciones"][tipo_credito_especifico]
+    
+    # Variable para nombres de archivo (sin caracteres especiales)
+    nombre_archivo_base = f"{categoria_credito}_{tipo_credito_especifico}".replace(" ", "_").replace("(", "").replace(")", "")
+    
+    # Determinar sistema
     if sistema_amortizacion == "Francés (Cuota Fija)":
-        st.info("ℹ️ **Sistema Francés:** La cuota mensual es constante. Al inicio pagas más intereses y menos capital. Al final es al revés.")
         sistema = "frances"
     else:
-        st.info("ℹ️ **Sistema Alemán:** La amortización del capital es constante. La cuota mensual disminuye mes a mes porque los intereses bajan.")
         sistema = "aleman"
+    
+    # ========== OBTENER DATOS DE LA API ==========
+    if api_conectada and api_tasas:
+        # Obtener bancos con tasas válidas para esta CATEGORÍA + TIPO
+        bancos_disponibles = api_tasas.get_bancos(
+            tipo_credito=tipo_credito_especifico, 
+            categoria=categoria_credito
+        )
+        
+        # Obtener promedio del mercado
+        promedio_mercado = api_tasas.get_promedio(
+            tipo_credito=tipo_credito_especifico, 
+            categoria=categoria_credito
+        )
+        
+        # Obtener mejor tasa
+        mejor_banco, mejor_tasa = api_tasas.get_mejor_tasa(
+            tipo_credito=tipo_credito_especifico, 
+            categoria=categoria_credito
+        )
+        
+        # Obtener todas las tasas (para debug)
+        tasas_por_tipo = api_tasas.get_tasas_por_tipo(
+            tipo_credito=tipo_credito_especifico, 
+            categoria=categoria_credito
+        )
+        
+        # Mostrar info del mercado
+        st.divider()
+        col_info1, col_info2, col_info3 = st.columns(3)
+        with col_info1:
+            st.metric("📈 Promedio del Mercado", f"{promedio_mercado:.2f}%")
+        with col_info2:
+            st.metric("🏆 Mejor Tasa", f"{mejor_tasa:.2f}%", mejor_banco)
+        with col_info3:
+            st.metric("🏦 Bancos Disponibles", f"{len(bancos_disponibles)}")
+        
+        # Debug expandible
+        with st.expander("🔍 Debug: Información de filtrado"):
+            st.write(f"**Categoría:** `{categoria_credito}`")
+            st.write(f"**Tipo específico:** `{tipo_credito_especifico}`")
+            st.write(f"**Fila en tabla SBS:** `{fila_tabla_sbs}`")
+            st.write(f"**Bancos encontrados:** {len(bancos_disponibles)}")
+            st.write(f"**Lista:** `{bancos_disponibles}`")
+            
+            if tasas_por_tipo:
+                st.write("**Tasas por banco:**")
+                for banco, tasa in sorted(tasas_por_tipo.items(), key=lambda x: x[1]):
+                    st.write(f"  - {banco}: {tasa}%")
+            
+            # Mostrar índices de categorías
+            indices = api_tasas.get_indices_categorias()
+            if indices:
+                st.write("**Índices de categorías en DataFrame:**")
+                for cat, idx in indices.items():
+                    marker = "👉" if cat == categoria_credito.lower() else "  "
+                    st.write(f"  {marker} {cat}: índice {idx}")
+    else:
+        bancos_disponibles = ["BBVA", "Crédito", "Interbank", "Scotiabank", "Pichincha", "BIF"]
+        promedio_mercado = 15.0
+    
+    # Mostrar información del sistema seleccionado
+    if sistema == "frances":
+        st.info("ℹ️ **Sistema Francés:** La cuota mensual es constante. Al inicio pagas más intereses y menos capital.")
+    else:
+        st.info("ℹ️ **Sistema Alemán:** La amortización del capital es constante. La cuota mensual disminuye mes a mes.")
     
     st.divider()
     
-    # ========== PASO 2: NÚMERO DE CRÉDITOS A COMPARAR ==========
+    # ========== PASO 2: NÚMERO DE CRÉDITOS ==========
     num_creditos = st.slider(
         "¿Cuántos créditos quieres comparar?", 
         2, 5, 2,
@@ -87,15 +263,12 @@ def mostrar_comparador_creditos():
     # ========== PASO 3: FORMULARIOS DE CADA CRÉDITO ==========
     st.subheader("💳 Datos de los Créditos")
     
-    # Almacenar datos de cada crédito
     creditos = []
-    
-    # Crear columnas según el número de créditos
     cols = st.columns(num_creditos)
     
     for i, col in enumerate(cols):
         with col:
-            st.markdown(f"### Crédito {chr(65 + i)}")  # A, B, C, D, E
+            st.markdown(f"### Crédito {chr(65 + i)}")
             
             # Selector de banco
             banco = st.selectbox(
@@ -105,25 +278,26 @@ def mostrar_comparador_creditos():
                 help="Selecciona la entidad financiera"
             )
             
-            # Obtener TEA sugerida según banco (si API disponible)
-            if API_DISPONIBLE:
-                try:
-                    tea_sugerida = api_tasas.get_tea(banco, tipo_credito)
-                except:
-                    tea_sugerida = 20.0 + (i * 2)
+            # Obtener TEA sugerida según banco
+            if api_conectada and api_tasas:
+                tea_sugerida = api_tasas.get_tea(
+                    banco=banco, 
+                    tipo_credito=tipo_credito_especifico, 
+                    categoria=categoria_credito
+                )
+                if tea_sugerida <= 0:
+                    tea_sugerida = 15.0 + (i * 2)
             else:
-                tea_sugerida = 20.0 + (i * 2)
+                tea_sugerida = 15.0 + (i * 2)
             
             st.markdown("**Datos Principales:**")
             
-            # Campos principales
             monto = st.number_input(
                 "Monto (S/)",
                 min_value=0.0,
                 value=10000.0,
                 step=1000.0,
                 key=f"monto_{i}",
-                help="Monto total del préstamo solicitado"
             )
             
             plazo = st.number_input(
@@ -133,34 +307,31 @@ def mostrar_comparador_creditos():
                 value=12,
                 step=1,
                 key=f"plazo_{i}",
-                help="Cantidad de meses para pagar el crédito"
             )
             
             tea = st.slider(
                 "TEA %",
                 min_value=0.0,
                 max_value=100.0,
-                value=tea_sugerida,
+                value=float(tea_sugerida),
                 step=0.1,
                 key=f"tea_{i}",
-                help=f"Tasa sugerida para {banco}: {tea_sugerida}%"
+                help=f"Tasa sugerida para {banco}: {tea_sugerida:.2f}%"
             )
             
-            # Mostrar si la tasa está por encima o debajo del promedio
-            if API_DISPONIBLE:
-                try:
-                    promedio = api_tasas.get_promedio(tipo_credito)
-                    if tea < promedio:
-                        st.success(f"✅ Tasa {(promedio - tea):.2f}% por debajo del promedio")
-                    else:
-                        st.warning(f"⚠️ Tasa {(tea - promedio):.2f}% por encima del promedio")
-                except:
-                    pass
+            # Indicador vs promedio
+            if api_conectada:
+                diferencia = tea - promedio_mercado
+                if diferencia < -0.5:
+                    st.success(f"✅ {abs(diferencia):.2f}% menor al promedio")
+                elif diferencia > 0.5:
+                    st.warning(f"⚠️ {diferencia:.2f}% mayor al promedio")
+                else:
+                    st.info("📊 Cercana al promedio")
             
             st.markdown("---")
             st.markdown("**💰 Costos Adicionales:**")
             
-            # Comisiones y costos
             with st.expander("Ver costos detallados"):
                 comision_desembolso = st.number_input(
                     "Comisión de desembolso (%)",
@@ -169,7 +340,6 @@ def mostrar_comparador_creditos():
                     value=0.0,
                     step=0.1,
                     key=f"com_desemb_{i}",
-                    help="Porcentaje del monto que cobra el banco al desembolsar"
                 )
                 
                 comision_mensual = st.number_input(
@@ -178,7 +348,6 @@ def mostrar_comparador_creditos():
                     value=0.0,
                     step=5.0,
                     key=f"com_mens_{i}",
-                    help="Comisión fija que se paga cada mes"
                 )
                 
                 seguro_desgravamen = st.number_input(
@@ -188,7 +357,6 @@ def mostrar_comparador_creditos():
                     value=0.0,
                     step=0.01,
                     key=f"seguro_{i}",
-                    help="Porcentaje sobre saldo que se paga mensualmente"
                 )
                 
                 portes = st.number_input(
@@ -197,7 +365,6 @@ def mostrar_comparador_creditos():
                     value=0.0,
                     step=5.0,
                     key=f"portes_{i}",
-                    help="Otros gastos mensuales (envío de estados de cuenta, etc.)"
                 )
             
             creditos.append({
@@ -217,43 +384,33 @@ def mostrar_comparador_creditos():
     if st.button("🔍 Comparar Créditos", type="primary", use_container_width=True):
         
         with st.spinner("Calculando y comparando créditos..."):
-            # Calcular datos para cada crédito
             resultados = []
             
             for i, credito in enumerate(creditos):
                 
-                # ===== CALCULAR SEGÚN SISTEMA DE AMORTIZACIÓN =====
                 if sistema == "frances":
                     cuota_base = calcular_cuota_francesa(credito['monto'], credito['tea'], credito['plazo'])
                     tabla = generar_tabla_francesa(credito['monto'], credito['tea'], credito['plazo'])
-                else:  # aleman
-                    # Para el alemán, la primera cuota es la más alta
+                else:
                     tabla = generar_tabla_alemana(credito['monto'], credito['tea'], credito['plazo'])
-                    cuota_base = tabla.loc[0, 'cuota']  # Primera cuota (la más alta)
+                    cuota_base = tabla.loc[0, 'cuota']
                 
                 totales = calcular_totales(tabla)
                 
-                # Calcular costos adicionales
+                # Costos adicionales
                 monto_comision_desembolso = credito['monto'] * credito['comision_desembolso']
-                
-                # Costos mensuales adicionales
                 costo_mensual_adicional = credito['comision_mensual'] + credito['portes']
-                
-                # Calcular seguro de desgravamen sobre saldo promedio (simplificado)
                 saldo_promedio = credito['monto'] / 2
                 seguro_total = saldo_promedio * credito['seguro_desgravamen'] * credito['plazo']
                 
-                # Cuota total (aproximada para el primer mes)
                 if sistema == "frances":
                     cuota_total_inicial = cuota_base + costo_mensual_adicional + (seguro_total / credito['plazo'])
-                else:  # aleman
-                    # En alemán, mostrar rango de cuotas
+                else:
                     cuota_primera = tabla.loc[0, 'cuota']
                     cuota_ultima = tabla.loc[credito['plazo']-1, 'cuota']
                     cuota_total_inicial = cuota_primera + costo_mensual_adicional + (seguro_total / credito['plazo'])
                     cuota_total_final = cuota_ultima + costo_mensual_adicional + (seguro_total / credito['plazo'])
                 
-                # Costo total del crédito
                 costo_total = (
                     totales['total_pagado'] + 
                     monto_comision_desembolso + 
@@ -261,7 +418,6 @@ def mostrar_comparador_creditos():
                     seguro_total
                 )
                 
-                # Calcular TCEA
                 try:
                     tcea = calcular_tcea_completa(
                         credito['monto'],
@@ -272,10 +428,9 @@ def mostrar_comparador_creditos():
                         credito['seguro_desgravamen'],
                         credito['portes']
                     )
-                except Exception as e:
+                except Exception:
                     tcea = None
                 
-                # Agregar resultados
                 resultado = {
                     'Crédito': credito['banco'],
                     'Sistema': sistema_amortizacion,
@@ -286,10 +441,9 @@ def mostrar_comparador_creditos():
                     'Costo Total': costo_total
                 }
                 
-                # Agregar cuotas según sistema
                 if sistema == "frances":
                     resultado['Cuota Mensual'] = cuota_total_inicial
-                else:  # aleman
+                else:
                     resultado['Primera Cuota'] = cuota_total_inicial
                     resultado['Última Cuota'] = cuota_total_final
                 
@@ -300,7 +454,6 @@ def mostrar_comparador_creditos():
             # ========== RESUMEN EJECUTIVO ==========
             st.subheader("🏆 Resumen Ejecutivo")
             
-            # Encontrar el mejor crédito (menor costo total)
             idx_ganador = df_resultados['Costo Total'].idxmin()
             idx_perdedor = df_resultados['Costo Total'].idxmax()
             
@@ -310,7 +463,6 @@ def mostrar_comparador_creditos():
             ahorro_vs_peor = perdedor['Costo Total'] - ganador['Costo Total']
             ahorro_porcentual_vs_peor = (ahorro_vs_peor / perdedor['Costo Total']) * 100
             
-            # Tarjeta destacada con el ganador
             st.success(f"""
             ### 🥇 Mejor Opción: {ganador['Crédito']}
             
@@ -321,7 +473,7 @@ def mostrar_comparador_creditos():
             - ✅ **Total intereses:** {formatear_moneda(ganador['Total Intereses'])}
             """)
             
-            # Métricas comparativas en columnas
+            # Métricas comparativas
             col_res1, col_res2, col_res3 = st.columns(3)
             
             with col_res1:
@@ -345,7 +497,7 @@ def mostrar_comparador_creditos():
                 st.metric(
                     "Total Intereses",
                     formatear_moneda(ganador['Total Intereses']),
-                    f"{formatear_moneda(abs(diferencia_vs_promedio))} {'por debajo' if diferencia_vs_promedio < 0 else 'por encima'} del promedio"
+                    f"{formatear_moneda(abs(diferencia_vs_promedio))} {'por debajo' if diferencia_vs_promedio < 0 else 'por encima'}"
                 )
             
             with col_res3:
@@ -355,12 +507,10 @@ def mostrar_comparador_creditos():
                     "Mejor opción"
                 )
             
-            # Advertencias si hay costos adicionales significativos
             if ganador['Costos Adicionales'] > ganador['Total Intereses'] * 0.2:
                 st.warning(f"""
                 ⚠️ **Atención:** Este crédito tiene costos adicionales significativos 
                 ({formatear_moneda(ganador['Costos Adicionales'])}). 
-                Verifica las comisiones y seguros detalladamente.
                 """)
             
             st.divider()
@@ -368,7 +518,6 @@ def mostrar_comparador_creditos():
             # ========== TABLA COMPARATIVA ==========
             st.subheader("📋 Tabla Comparativa Detallada")
             
-            # Formatear para mostrar
             df_mostrar = df_resultados.copy()
             df_mostrar['TEA (%)'] = df_mostrar['TEA (%)'].apply(lambda x: f"{x:.2f}%")
             if df_mostrar['TCEA (%)'].iloc[0] != "N/A":
@@ -401,7 +550,7 @@ def mostrar_comparador_creditos():
                         formatear_moneda(df_resultados.loc[idx_mejor_cuota, 'Cuota Mensual']),
                         df_resultados.loc[idx_mejor_cuota, 'Crédito']
                     )
-            else:  # aleman
+            else:
                 col1, col2, col3, col4 = st.columns(4)
                 
                 with col1:
@@ -439,13 +588,12 @@ def mostrar_comparador_creditos():
             
             st.divider()
             
-            # ========== GRÁFICOS COMPARATIVOS ==========
+            # ========== GRÁFICOS ==========
             st.subheader("📊 Comparación Visual")
             
             col1, col2 = st.columns(2)
             
             with col1:
-                # Gráfico de cuotas
                 fig1 = go.Figure()
                 
                 if sistema == "frances":
@@ -486,7 +634,6 @@ def mostrar_comparador_creditos():
                 st.plotly_chart(fig1, use_container_width=True)
             
             with col2:
-                # Gráfico de costo total
                 fig2 = go.Figure()
                 fig2.add_trace(go.Bar(
                     x=df_resultados['Crédito'],
@@ -570,6 +717,8 @@ def mostrar_comparador_creditos():
                 """)
             
             st.divider()
+            
+            # ========== EXPORTAR RESULTADOS ==========
             st.subheader("💾 Exportar Resultados")
             
             col_exp1, col_exp2, col_exp3 = st.columns(3)
@@ -580,7 +729,7 @@ def mostrar_comparador_creditos():
                 st.download_button(
                     label="📥 Descargar CSV",
                     data=csv,
-                    file_name=f"comparacion_{tipo_credito.lower()}_{sistema}.csv",
+                    file_name=f"comparacion_{nombre_archivo_base}_{sistema}.csv",
                     mime="text/csv",
                     use_container_width=True,
                     key="btn_csv"
@@ -591,12 +740,14 @@ def mostrar_comparador_creditos():
                 try:
                     from modules.exportador import exportar_a_excel
                     
-                    excel_file = exportar_a_excel(df_resultados, creditos, sistema, tipo_credito)
+                    # Pasar el tipo de crédito completo para el Excel
+                    tipo_credito_completo = f"{categoria_credito} - {tipo_credito_especifico}"
+                    excel_file = exportar_a_excel(df_resultados, creditos, sistema, tipo_credito_completo)
                     
                     st.download_button(
                         label="📊 Descargar Excel",
                         data=excel_file,
-                        file_name=f"comparacion_{tipo_credito.lower()}_{sistema}.xlsx",
+                        file_name=f"comparacion_{nombre_archivo_base}_{sistema}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True,
                         key="btn_excel"
@@ -609,12 +760,13 @@ def mostrar_comparador_creditos():
                 try:
                     from modules.exportador import exportar_a_pdf
                     
-                    pdf_file = exportar_a_pdf(df_resultados, creditos, sistema, tipo_credito)
+                    tipo_credito_completo = f"{categoria_credito} - {tipo_credito_especifico}"
+                    pdf_file = exportar_a_pdf(df_resultados, creditos, sistema, tipo_credito_completo)
                     
                     st.download_button(
                         label="📄 Descargar PDF",
                         data=pdf_file,
-                        file_name=f"comparacion_{tipo_credito.lower()}_{sistema}.pdf",
+                        file_name=f"comparacion_{nombre_archivo_base}_{sistema}.pdf",
                         mime="application/pdf",
                         use_container_width=True,
                         key="btn_pdf"
@@ -622,8 +774,6 @@ def mostrar_comparador_creditos():
                 except Exception as e:
                     st.error(f"Error al generar PDF: {e}")
 
-        
-    
     # ========== COMPARACIÓN FRANCÉS VS ALEMÁN ==========
     st.subheader("🔄 Comparador: Sistema Francés vs Alemán")
     
@@ -709,7 +859,7 @@ def mostrar_comparador_creditos():
                 )
             
             with col4:
-                ahorro_porcentual = (diferencia_interes / totales_frances['total_intereses']) * 100
+                ahorro_porcentual = (diferencia_interes / totales_frances['total_intereses']) * 100 if totales_frances['total_intereses'] > 0 else 0
                 st.metric(
                     "Ahorro con Alemán",
                     formatear_moneda(abs(diferencia_interes)),
